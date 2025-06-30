@@ -1,11 +1,12 @@
-This is a Kotlin Multiplatform project targeting Desktop.
+# Guguk [WIP]
 
-* `/composeApp` is for code that will be shared across your Compose Multiplatform applications.
-  It contains several subfolders:
-  - `commonMain` is for code that’s common for all targets.
-  - Other folders are for Kotlin code that will be compiled for only the platform indicated in the folder name.
-    For example, if you want to use Apple’s CoreCrypto for the iOS part of your Kotlin app,
-    `iosMain` would be the right folder for such calls.
+🎯 **GUGUK** is a Compose Multiplatform desktop application that allows developers to quickly create and test mock data while working with a local backend.
 
+## 🚀 Features
 
-Learn more about [Kotlin Multiplatform](https://www.jetbrains.com/help/kotlin-multiplatform-dev/get-started.html)…
+- 📂 Load or paste a JSON file
+- 🛠️ Manually edit fields from the JSON structure
+- 🌐 Send `POST`, `PUT`, `DELETE`, or `GET` requests to a specified endpoint
+- ⚙️ View HTTP responses and status codes in real-time
+
+⚠️ This project is currently in under active development. Features may change or break at any time.
