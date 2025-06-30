@@ -1,4 +1,6 @@
-# Guguk [WIP]
+# Guguk [WIP] 
+
+🇹🇷 <a href="/README_TR.md" target="_blank"> Türkçe</a>
 
 🎯 **GUGUK** is a Compose Multiplatform desktop application that allows developers to quickly create and test mock data while working with a local backend.
 
