@@ -1,5 +1,6 @@
 package com.ibrahimethemsen.guguk
 
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -20,12 +21,14 @@ class MockInterceptor(
     @Throws(IOException::class)
     override fun intercept(chain: Interceptor.Chain): Response {
         val originalRequest = chain.request()
-        val originalUrl = originalRequest.url.toString()
+        val requestUrl = originalRequest.url
 
-        // Endpoint'in mock edilip edilmeyeceğini kontrol et
-        val shouldMock = mockEndpointSet.any { endpoint ->
-            originalUrl.contains(endpoint) || originalRequest.url.encodedPath.contains(endpoint)
+        val requestEndpointPath = requestUrl.encodedPath
+
+        val shouldMock = mockEndpointSet.any { definedMockEndpoint ->
+            requestEndpointPath.endsWith(definedMockEndpoint)
         }
+
 
         return if (shouldMock) {
             val mockRequest = createMockRequest(originalRequest)
@@ -44,11 +47,16 @@ class MockInterceptor(
 
     private fun createMockRequest(originalRequest: Request): Request {
         val originalUrl = originalRequest.url
-        val mockUrl = originalUrl.newBuilder()
-            .scheme("http")
-            .host("localhost")
-            .port(8080)
-            .build()
+
+        val parsedLocalServerUrl = localServerUrl.toHttpUrlOrNull()
+            ?: throw IllegalArgumentException("Invalid localServerUrl: $localServerUrl")
+
+        val mockUrlBuilder = originalUrl.newBuilder()
+            .scheme(parsedLocalServerUrl.scheme)
+            .host(parsedLocalServerUrl.host)
+            .port(parsedLocalServerUrl.port)
+
+        val mockUrl = mockUrlBuilder.build()
 
         return originalRequest.newBuilder()
             .url(mockUrl)

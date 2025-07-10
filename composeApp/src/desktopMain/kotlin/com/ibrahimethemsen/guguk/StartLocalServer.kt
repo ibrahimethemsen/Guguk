@@ -91,3 +91,7 @@ fun Application.configureRouting() {
         }
     }
 }
+
+fun main() {
+    startLocalServer()
+}
