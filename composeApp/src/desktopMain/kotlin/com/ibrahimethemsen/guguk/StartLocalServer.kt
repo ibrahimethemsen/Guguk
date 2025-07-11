@@ -3,9 +3,14 @@ package com.ibrahimethemsen.guguk
 import io.ktor.http.ContentType
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
+import io.ktor.network.tls.certificates.buildKeyStore
+import io.ktor.network.tls.certificates.saveToFile
 import io.ktor.server.application.Application
 import io.ktor.server.application.log
+import io.ktor.server.engine.applicationEnvironment
+import io.ktor.server.engine.connector
 import io.ktor.server.engine.embeddedServer
+import io.ktor.server.engine.sslConnector
 import io.ktor.server.netty.Netty
 import io.ktor.server.request.httpMethod
 import io.ktor.server.request.uri
@@ -15,6 +20,8 @@ import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
+import org.slf4j.LoggerFactory
+import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
 object MockServerState {
@@ -45,7 +52,32 @@ object MockServerState {
 }
 
 fun startLocalServer() {
-    embeddedServer(Netty, port = 8080, host = "0.0.0.0", module = Application::configureRouting)
+    val keyStoreFile = File("build/keystore.jks")
+    val keyStore = buildKeyStore {
+        certificate("gugukMock") {
+            password = "guguk"
+            domains = listOf("127.0.0.1", "0.0.0.0", "localhost", "10.0.2.2")
+        }
+    }
+    keyStore.saveToFile(keyStoreFile, "guguk1453")
+
+    val environment = applicationEnvironment {
+        log = LoggerFactory.getLogger("ktor.application")
+    }
+    embeddedServer(factory = Netty, environment = environment, configure = {
+        connector {
+            port = 8080
+        }
+        sslConnector(
+            keyStore = keyStore,
+            keyAlias = "gugukMock",
+            keyStorePassword = { "guguk1453".toCharArray() },
+            privateKeyPassword = { "guguk".toCharArray() }) {
+            port = 8443
+            keyStorePath = keyStoreFile
+        }
+
+    }, module = Application::configureRouting)
         .start(wait = true)
 }
 

@@ -1,6 +1,6 @@
 package com.ibrahimethemsen.sample.data.di
 
-import com.ibrahimethemsen.guguk.addMockInterceptor
+import com.ibrahimethemsen.guguk.addGugukInterceptor
 import com.ibrahimethemsen.sample.data.service.QuoteService
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import dagger.Module
@@ -18,6 +18,7 @@ import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
 
+private const val BASE_URL = "https://api.quotable.io/"
 @[Module InstallIn(SingletonComponent::class)]
 object NetworkModule {
 
@@ -36,7 +37,7 @@ object NetworkModule {
         json: Json
     ): QuoteService {
         return Retrofit.Builder()
-            .baseUrl("https://api.quotable.io/")
+            .baseUrl(BASE_URL)
             .client(okHttpClient)
             .addConverterFactory(
                 json.asConverterFactory("application/json".toMediaType())
@@ -79,8 +80,9 @@ object NetworkModule {
             builder.sslSocketFactory(sslSocketFactory, trustAllCerts[0] as X509TrustManager)
             builder.hostnameVerifier { _, _ -> true }
 
-            builder.addMockInterceptor(
-                localServerUrl = "http://10.0.2.2:8080/",
+            builder.addGugukInterceptor(
+                baseUrl = BASE_URL,
+                localServerUrl = "https://10.0.2.2:8443/",
                 mockEndpoints = setOf("")
             )
 

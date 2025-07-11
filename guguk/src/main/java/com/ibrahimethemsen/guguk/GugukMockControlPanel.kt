@@ -6,21 +6,21 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 
 @Composable
-fun rememberMockDataManager(): MockDataManager {
-    return remember { MockDataManager.getInstance() }
+fun rememberMockDataManager(): GugukMockDataManager {
+    return remember { GugukMockDataManager.getInstance() }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MockControlPanel(
-    mockManager: MockDataManager = rememberMockDataManager()
+fun GugukMockControlPanel(
+    mockManager: GugukMockDataManager = rememberMockDataManager()
 ) {
     var newEndpoint by remember { mutableStateOf("") }
     var mockEndpoints by remember { mutableStateOf(mockManager.getMockEndpoints()) }
-    var isEnabled by remember { mutableStateOf(mockManager.isEnabled()) }
 
     Card(
         modifier = Modifier
@@ -31,34 +31,16 @@ fun MockControlPanel(
             modifier = Modifier.padding(16.dp)
         ) {
             Text(
-                text = "Mock Data Control Panel",
+                text = "Guguk Control Panel",
                 style = MaterialTheme.typography.headlineSmall
             )
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Enable/Disable Switch
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("Mock Enabled")
-                Switch(
-                    checked = isEnabled,
-                    onCheckedChange = { enabled ->
-                        isEnabled = enabled
-                        if (enabled) mockManager.enable() else mockManager.disable()
-                    }
-                )
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Add new endpoint
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 OutlinedTextField(
                     value = newEndpoint,
@@ -82,7 +64,6 @@ fun MockControlPanel(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Mock endpoints list
             Text(
                 text = "Mock Endpoints:",
                 style = MaterialTheme.typography.titleMedium
@@ -117,7 +98,6 @@ fun MockControlPanel(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Clear all button
             OutlinedButton(
                 onClick = {
                     mockManager.clearMockEndpoints()
@@ -129,4 +109,10 @@ fun MockControlPanel(
             }
         }
     }
+}
+
+@Preview
+@Composable
+private fun PrevMockControlPanel(){
+    GugukMockControlPanel()
 }

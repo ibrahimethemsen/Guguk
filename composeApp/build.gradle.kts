@@ -36,6 +36,7 @@ kotlin {
             implementation(libs.ktor.serverCore)
             implementation(libs.ktor.serverNetty)
             implementation(libs.kotlinx.coroutinesSwing)
+            implementation(libs.ktor.certificates)
         }
     }
 }

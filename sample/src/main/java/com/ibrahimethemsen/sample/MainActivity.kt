@@ -21,7 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.ibrahimethemsen.GugukViewModel
-import com.ibrahimethemsen.guguk.MockControlPanel
+import com.ibrahimethemsen.guguk.GugukMockControlPanel
 import com.ibrahimethemsen.sample.ui.theme.GugukRootTheme
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -64,6 +64,6 @@ fun GugukApp(
             Text("Again Request")
         }
         Spacer(modifier = Modifier.height(16.dp))
-        MockControlPanel()
+        GugukMockControlPanel()
     }
 }
