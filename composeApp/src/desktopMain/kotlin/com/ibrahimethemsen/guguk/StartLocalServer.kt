@@ -7,6 +7,7 @@ import io.ktor.network.tls.certificates.buildKeyStore
 import io.ktor.network.tls.certificates.saveToFile
 import io.ktor.server.application.Application
 import io.ktor.server.application.log
+import io.ktor.server.engine.ApplicationEngine
 import io.ktor.server.engine.applicationEnvironment
 import io.ktor.server.engine.connector
 import io.ktor.server.engine.embeddedServer
@@ -52,6 +53,17 @@ object MockServerState {
 }
 
 fun startLocalServer() {
+    embeddedServer(
+        Netty,
+        applicationEnvironment { log = LoggerFactory.getLogger("ktor.application") },
+        {
+            envConfig()
+        },
+        module = Application::configureRouting
+    ).start(wait = true)
+}
+
+private fun ApplicationEngine.Configuration.envConfig() {
     val keyStoreFile = File("build/keystore.jks")
     val keyStore = buildKeyStore {
         certificate("gugukMock") {
@@ -60,25 +72,17 @@ fun startLocalServer() {
         }
     }
     keyStore.saveToFile(keyStoreFile, "guguk1453")
-
-    val environment = applicationEnvironment {
-        log = LoggerFactory.getLogger("ktor.application")
+    connector {
+        port = 8080
     }
-    embeddedServer(factory = Netty, environment = environment, configure = {
-        connector {
-            port = 8080
-        }
-        sslConnector(
-            keyStore = keyStore,
-            keyAlias = "gugukMock",
-            keyStorePassword = { "guguk1453".toCharArray() },
-            privateKeyPassword = { "guguk".toCharArray() }) {
-            port = 8443
-            keyStorePath = keyStoreFile
-        }
-
-    }, module = Application::configureRouting)
-        .start(wait = true)
+    sslConnector(
+        keyStore = keyStore,
+        keyAlias = "gugukMock",
+        keyStorePassword = { "guguk1453".toCharArray() },
+        privateKeyPassword = { "guguk".toCharArray() }) {
+        port = 8443
+        keyStorePath = keyStoreFile
+    }
 }
 
 fun Application.configureRouting() {
@@ -123,6 +127,7 @@ fun Application.configureRouting() {
         }
     }
 }
+
 
 fun main() {
     startLocalServer()

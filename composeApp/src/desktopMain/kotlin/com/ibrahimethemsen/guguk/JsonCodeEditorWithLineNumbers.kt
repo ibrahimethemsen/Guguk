@@ -16,6 +16,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.AnnotatedString
@@ -41,6 +42,7 @@ fun JsonCodeEditorWithLineNumbers(
     val lines = value.split("\n")
     Column(
         modifier = modifier
+            .clip(MaterialTheme.shapes.small)
             .border(
                 1.dp,
                 if (isError) Color.Red else Color.Gray,

@@ -1,21 +1,35 @@
 package com.ibrahimethemsen.guguk
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -25,14 +39,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import gugukroot.composeapp.generated.resources.Res
+import gugukroot.composeapp.generated.resources.ic_json
 import io.ktor.http.HttpMethod
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
+import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.ui.tooling.preview.Preview
 import java.awt.FileDialog
 import java.awt.Frame
@@ -46,7 +64,7 @@ fun App() {
         var targetEndpoint by remember { mutableStateOf("") }
         var expanded by remember { mutableStateOf(false) }
         var selectedMethodString by remember { mutableStateOf("GET") }
-        val methods = listOf("GET", "POST", "PUT", "DELETE")
+        val methods = listOf("GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS")
 
         var feedbackMessage by remember { mutableStateOf<String?>(null) }
         var feedbackMessageType by remember { mutableStateOf<FeedbackType?>(null) }
@@ -90,28 +108,45 @@ fun App() {
         }
 
         Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-            Text("Mock Yanıt Tanımlama Ekranı", style = MaterialTheme.typography.headlineSmall)
-            Spacer(modifier = Modifier.height(16.dp))
-
-            OutlinedTextField(
-                modifier = Modifier.fillMaxWidth(),
-                value = targetEndpoint,
-                onValueChange = { targetEndpoint = it.removePrefix("/") },
-                label = { Text("Hedef Endpoint (örn: users)") },
-                placeholder = { Text("Örn: /users, /products/123") }
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-
             Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(IntrinsicSize.Min)
+                    .border(
+                        BorderStroke(1.dp, Color.Gray),
+                        shape = RoundedCornerShape(8.dp)
+                    )
+                    .clip(RoundedCornerShape(8.dp)),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Bu Endpoint'e Gelen", modifier = Modifier.padding(end = 8.dp))
                 Box {
-                    Button(onClick = { expanded = true }) {
-                        Text(selectedMethodString)
+                    Row(
+                        modifier = Modifier
+                            .background(Color.Transparent)
+                            .padding(horizontal = 12.dp, vertical = 14.dp)
+                            .clickable { expanded = true },
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = selectedMethodString,
+                            color = when (selectedMethodString) {
+                                "GET" -> Color(0xFF28A745)
+                                "POST" -> Color(0xFFFFA500)
+                                "PUT" -> Color(0xFF007BFF)
+                                "DELETE" -> Color(0xFFDC3545)
+                                else -> MaterialTheme.colorScheme.onSurface
+                            }
+                        )
+                        Icon(
+                            imageVector = Icons.Filled.ArrowDropDown,
+                            contentDescription = "Select HTTP Method",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
-                    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                    DropdownMenu(
+                        expanded = expanded,
+                        onDismissRequest = { expanded = false }
+                    ) {
                         methods.forEach { method ->
                             DropdownMenuItem(
                                 text = { Text(method) },
@@ -123,12 +158,106 @@ fun App() {
                         }
                     }
                 }
-                Text(" İsteğine Verilecek Yanıt:", modifier = Modifier.padding(start = 8.dp))
+
+                VerticalDivider(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .width(1.dp),
+                    color = Color.Gray
+                )
+
+                OutlinedTextField(
+                    value = targetEndpoint,
+                    onValueChange = { targetEndpoint = it.removePrefix("/") },
+                    label = { Text("Endpoint giriniz ") },
+                    placeholder = { Text("Örn: /users, /products/123") },
+                    modifier = Modifier.weight(1f),
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                        disabledContainerColor = Color.Transparent,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                        disabledIndicatorColor = Color.Transparent,
+                    ),
+                    singleLine = true
+                )
+                Image(
+                    modifier = Modifier.size(40.dp).clickable {
+                        selectJsonFile()
+                    },
+                    painter = painterResource(Res.drawable.ic_json),
+                    contentDescription = null
+                )
+                Button(
+                    onClick = {
+                        if (targetEndpoint.isBlank()) {
+                            feedbackMessage = "Hedef endpoint boş olamaz."
+                            feedbackMessageType = FeedbackType.ERROR
+                            return@Button
+                        }
+                        if (jsonInputText.isNotBlank() && jsonParseError != null) {
+                            feedbackMessage =
+                                "Yanıt body'si için girilen JSON geçersiz: $jsonParseError"
+                            feedbackMessageType = FeedbackType.ERROR
+                            return@Button
+                        }
+
+                        val pathKey = "/${targetEndpoint.trimStart('/')}"
+                        val ktorHttpMethod = when (selectedMethodString) {
+                            "GET" -> HttpMethod.Get
+                            "POST" -> HttpMethod.Post
+                            "PUT" -> HttpMethod.Put
+                            "DELETE" -> HttpMethod.Delete
+                            else -> {
+                                feedbackMessage = "Geçersiz HTTP metodu seçildi."
+                                feedbackMessageType = FeedbackType.ERROR
+                                return@Button
+                            }
+                        }
+
+                        MockServerState.setResponse(pathKey, ktorHttpMethod, jsonInputText)
+
+                        feedbackMessage =
+                            "Mock yanıt '$pathKey' için $selectedMethodString isteğine ayarlandı."
+                        feedbackMessageType = FeedbackType.SUCCESS
+                    },
+                    enabled = targetEndpoint.isNotBlank() && (jsonInputText.isBlank() || jsonParseError == null),
+                    shape = RoundedCornerShape(
+                        topStart = 0.dp,
+                        bottomStart = 0.dp,
+                        topEnd = 8.dp,
+                        bottomEnd = 8.dp
+                    ),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF007BFF)),
+                    modifier = Modifier.fillMaxHeight()
+                ) {
+                    Text("Send", color = Color.White)
+                }
+            }
+
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            if (feedbackMessage != null && feedbackMessageType != null) {
+                Spacer(modifier = Modifier.height(16.dp))
+                val textColor = when (feedbackMessageType) {
+                    FeedbackType.SUCCESS -> Color(0xFF4CAF50)
+                    FeedbackType.ERROR -> MaterialTheme.colorScheme.error
+                    FeedbackType.INFO -> MaterialTheme.colorScheme.onSurface
+                    null -> MaterialTheme.colorScheme.onSurface
+                }
+                Text(
+                    feedbackMessage!!,
+                    color = textColor,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.fillMaxWidth().border(1.dp, textColor.copy(alpha = 0.5f))
+                        .padding(8.dp)
+                )
             }
             Spacer(modifier = Modifier.height(16.dp))
 
-
-            Text("Yanıt Body'si (JSON):", style = MaterialTheme.typography.titleMedium)
+            Text("Response Json", style = MaterialTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(8.dp))
 
             JsonCodeEditorWithLineNumbers(
@@ -160,69 +289,8 @@ fun App() {
                 isError = jsonParseError != null,
                 errorLine = errorLine,
                 errorMessage = jsonParseError,
-                modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 200.dp)
+                modifier = Modifier.fillMaxSize()
             )
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Button(onClick = selectJsonFile) {
-                Text("Yanıt JSON'ını Dosyadan Yükle")
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Button(
-                onClick = {
-                    if (targetEndpoint.isBlank()) {
-                        feedbackMessage = "Hedef endpoint boş olamaz."
-                        feedbackMessageType = FeedbackType.ERROR
-                        return@Button
-                    }
-                    if (jsonInputText.isNotBlank() && jsonParseError != null) {
-                        feedbackMessage = "Yanıt body'si için girilen JSON geçersiz: $jsonParseError"
-                        feedbackMessageType = FeedbackType.ERROR
-                        return@Button
-                    }
-
-                    val pathKey = "/${targetEndpoint.trimStart('/')}"
-                    val ktorHttpMethod = when (selectedMethodString) {
-                        "GET" -> HttpMethod.Get
-                        "POST" -> HttpMethod.Post
-                        "PUT" -> HttpMethod.Put
-                        "DELETE" -> HttpMethod.Delete
-                        else -> {
-                            feedbackMessage = "Geçersiz HTTP metodu seçildi."
-                            feedbackMessageType = FeedbackType.ERROR
-                            return@Button
-                        }
-                    }
-
-                    MockServerState.setResponse(pathKey, ktorHttpMethod, jsonInputText)
-
-                    feedbackMessage = "Mock yanıt '$pathKey' için $selectedMethodString isteğine ayarlandı."
-                    feedbackMessageType = FeedbackType.SUCCESS
-                },
-                modifier = Modifier.align(Alignment.End),
-                enabled = targetEndpoint.isNotBlank() && (jsonInputText.isBlank() || jsonParseError == null)
-            ) {
-                Text("Mock Yanıtı Ayarla/Güncelle")
-            }
-
-            if (feedbackMessage != null && feedbackMessageType != null) {
-                Spacer(modifier = Modifier.height(16.dp))
-                val textColor = when (feedbackMessageType) {
-                    FeedbackType.SUCCESS -> Color(0xFF4CAF50)
-                    FeedbackType.ERROR -> MaterialTheme.colorScheme.error
-                    FeedbackType.INFO -> MaterialTheme.colorScheme.onSurface
-                    null -> MaterialTheme.colorScheme.onSurface
-                }
-                Text(
-                    feedbackMessage!!,
-                    color = textColor,
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.fillMaxWidth().border(1.dp, textColor.copy(alpha = 0.5f))
-                        .padding(8.dp)
-                )
-            }
         }
     }
 }
