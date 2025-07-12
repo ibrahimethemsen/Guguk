@@ -48,6 +48,9 @@ fun JsonCodeEditorWithLineNumbers(
     errorLine: Int?,
     errorMessage: String?,
     modifier: Modifier = Modifier,
+    searchQuery: String = "",
+    matchPositions: List<IntRange> = emptyList(),
+    currentMatchIndex: Int = -1
 ) {
     val editorTextStyle = TextStyle(
         fontFamily = FontFamily.Monospace,
@@ -117,6 +120,9 @@ fun JsonCodeEditorWithLineNumbers(
                         json = textFieldValue.text,
                         isError = isError,
                         errorLineNum = errorLine,
+                        searchQuery = searchQuery,
+                        matchPositions = matchPositions,
+                        currentMatchIndex = currentMatchIndex
                     )
                     TransformedText(annotatedString, OffsetMapping.Identity)
                 },
@@ -269,7 +275,10 @@ private fun enhanceJsonEditing(oldValue: TextFieldValue, newValue: TextFieldValu
 fun modernJsonSyntaxHighlighting(
     json: String,
     isError: Boolean,
-    errorLineNum: Int?
+    errorLineNum: Int?,
+    searchQuery: String = "",
+    matchPositions: List<IntRange> = emptyList(),
+    currentMatchIndex: Int = -1
 ): AnnotatedString {
     val builder = AnnotatedString.Builder()
     builder.append(json)
@@ -332,6 +341,16 @@ fun modernJsonSyntaxHighlighting(
                     endCharIndex
                 )
             }
+        }
+    }
+
+    if (searchQuery.isNotBlank() && matchPositions.isNotEmpty()) {
+        matchPositions.forEachIndexed { idx, range ->
+            val style = if (idx == currentMatchIndex)
+                SpanStyle(background = Color(0xFFFFA726), color = Color.Black) // turuncu
+            else
+                SpanStyle(background = Color(0xFFFFFF00), color = Color.Black) // sarı
+            builder.addStyle(style, range.first, range.last + 1)
         }
     }
 

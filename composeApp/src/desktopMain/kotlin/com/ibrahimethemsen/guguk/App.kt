@@ -23,11 +23,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.FormatIndentIncrease
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -86,6 +89,9 @@ fun App() {
         val coroutineScope = rememberCoroutineScope()
         var debounceJob by remember { mutableStateOf<Job?>(null) }
         var isJsonValid by remember { mutableStateOf(false) }
+        var searchQuery by remember { mutableStateOf("") }
+        var matchPositions by remember { mutableStateOf(listOf<IntRange>()) }
+        var currentMatchIndex by remember { mutableStateOf(0) }
 
         val selectJsonFile: () -> Unit = {
             val fileDialog =
@@ -384,17 +390,65 @@ fun App() {
 
             Spacer(modifier = Modifier.height(8.dp))
 
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = {
+                    searchQuery = it
+                    val regex = if (it.isNotBlank()) Regex(Regex.escape(it), RegexOption.IGNORE_CASE) else null
+                    val matches = regex?.findAll(jsonInputTextValue.text)?.map { mr -> mr.range }?.toList() ?: emptyList()
+                    matchPositions = matches
+                    currentMatchIndex = if (matches.isNotEmpty()) 0 else -1
+                },
+                label = { Text("Ara...") },
+                modifier = Modifier.fillMaxWidth(),
+                trailingIcon = {
+                    Row {
+                        IconButton(
+                            onClick = {
+                                if (matchPositions.isNotEmpty()) {
+                                    currentMatchIndex = if (currentMatchIndex > 0) currentMatchIndex - 1 else matchPositions.lastIndex
+                                }
+                            },
+                            enabled = matchPositions.size > 1
+                        ) {
+                            Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Önceki")
+                        }
+                        IconButton(
+                            onClick = {
+                                if (matchPositions.isNotEmpty()) {
+                                    currentMatchIndex = if (currentMatchIndex < matchPositions.lastIndex) currentMatchIndex + 1 else 0
+                                }
+                            },
+                            enabled = matchPositions.size > 1
+                        ) {
+                            Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Sonraki")
+                        }
+                    }
+                }
+            )
+            Spacer(modifier = Modifier.height(8.dp))
             JsonCodeEditorWithLineNumbers(
                 value = jsonInputTextValue,
                 onValueChange = { newValue ->
                     jsonInputTextValue = newValue
                     feedbackMessage = null
                     validateJson(newValue.text)
+                    val regex = if (searchQuery.isNotBlank()) Regex(Regex.escape(searchQuery), RegexOption.IGNORE_CASE) else null
+                    val matches = regex?.findAll(newValue.text)?.map { mr -> mr.range }?.toList() ?: emptyList()
+                    matchPositions = matches
+                    if (matches.isNotEmpty()) {
+                        if (currentMatchIndex !in matches.indices) currentMatchIndex = 0
+                    } else {
+                        currentMatchIndex = -1
+                    }
                 },
                 isError = jsonParseError != null,
                 errorLine = errorLine,
                 errorMessage = jsonParseError,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize(),
+                searchQuery = searchQuery,
+                matchPositions = matchPositions,
+                currentMatchIndex = currentMatchIndex
             )
         }
     }
