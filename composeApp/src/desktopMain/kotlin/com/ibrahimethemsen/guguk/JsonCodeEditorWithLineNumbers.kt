@@ -4,239 +4,337 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.OffsetMapping
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.TransformedText
-import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.serialization.SerializationException
+import kotlin.math.roundToInt
 
 @Composable
 fun JsonCodeEditorWithLineNumbers(
-    value: String,
-    onValueChange: (String) -> Unit,
-    isError: Boolean = false,
-    errorLine: Int? = null,
-    errorMessage: String? = null,
-    modifier: Modifier = Modifier
+    value: TextFieldValue,
+    onValueChange: (TextFieldValue) -> Unit,
+    isError: Boolean,
+    errorLine: Int?,
+    errorMessage: String?,
+    modifier: Modifier = Modifier,
 ) {
-    val lines = value.split("\n")
-    Column(
+    val editorTextStyle = TextStyle(
+        fontFamily = FontFamily.Monospace,
+        fontSize = 14.sp,
+        color = Color(0xFFE4E6EA),
+        lineHeight = 20.sp
+    )
+
+    val lines = remember(value.text) { value.text.split('\n') }
+    val density = LocalDensity.current
+    val editorLineHeightDp = with(density) { editorTextStyle.lineHeight.toDp() }
+    val verticalPadding = 12.dp
+
+    Row(
         modifier = modifier
-            .clip(MaterialTheme.shapes.small)
+            .clip(RoundedCornerShape(8.dp))
             .border(
-                1.dp,
-                if (isError) Color.Red else Color.Gray,
-                shape = MaterialTheme.shapes.small
+                2.dp,
+                if (isError) MaterialTheme.colorScheme.error else Color(0xFF3E4451),
+                shape = RoundedCornerShape(8.dp)
             )
-            .background(Color(0xFF23272E))
+            .background(Color(0xFF1E1E1E))
             .padding(0.dp)
-            .height(320.dp)
+            .height(IntrinsicSize.Min)
     ) {
-        Row(Modifier.fillMaxWidth().weight(2f)) {
-            Column(
-                Modifier.fillMaxHeight()
-                    .padding(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
-                horizontalAlignment = Alignment.End
-            ) {
-                for (i in lines.indices) {
-                    val color = if (isError && errorLine == i + 1) Color.Red else Color.Gray
-                    Text(
-                        (i + 1).toString(),
-                        color = color,
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 15.sp
-                    )
-                }
+        Column(
+            modifier = Modifier
+                .fillMaxHeight()
+                .background(Color(0xFF252526))
+                .padding(vertical = verticalPadding)
+                .padding(horizontal = 12.dp)
+        ) {
+            lines.forEachIndexed { index, _ ->
+                val lineNumber = index + 1
+                val currentLineIsError = isError && errorLine == lineNumber
+                Text(
+                    text = lineNumber.toString().padStart(lines.size.toString().length),
+                    style = editorTextStyle.copy(
+                        color = if (currentLineIsError) Color(0xFFFF6B6B) else Color(0xFF858585),
+                        textAlign = TextAlign.End,
+                        fontSize = 12.sp
+                    ),
+                    modifier = Modifier
+                        .height(editorLineHeightDp)
+                        .then(
+                            if (currentLineIsError) Modifier.background(
+                                Color(0xFFFF6B6B).copy(alpha = 0.2f),
+                                RoundedCornerShape(4.dp)
+                            ) else Modifier
+                        )
+                        .padding(end = 8.dp)
+                )
             }
+        }
+
+        Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
             BasicTextField(
                 value = value,
-                onValueChange = onValueChange,
-                modifier = Modifier.fillMaxWidth().fillMaxHeight().padding(vertical = 8.dp),
-                textStyle = MaterialTheme.typography.bodyMedium.copy(
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 15.sp,
-                    color = Color(0xFFD8DEE9)
-                ),
+                onValueChange = { newValue ->
+                    val enhancedValue = enhanceJsonEditing(value, newValue)
+                    onValueChange(enhancedValue)
+                },
+                textStyle = editorTextStyle,
                 cursorBrush = SolidColor(Color(0xFF61AFEF)),
+                visualTransformation = { textFieldValue ->
+                    val annotatedString = modernJsonSyntaxHighlighting(
+                        json = textFieldValue.text,
+                        isError = isError,
+                        errorLineNum = errorLine,
+                    )
+                    TransformedText(annotatedString, OffsetMapping.Identity)
+                },
                 decorationBox = { innerTextField ->
-                    Box(Modifier.fillMaxSize().padding(end = 8.dp)) {
-                        if (value.isEmpty()) {
-                            Text(
-                                "{\n  \"key\": \"value\"\n}",
-                                color = Color.Gray,
-                                fontFamily = FontFamily.Monospace
-                            )
+                    Row(Modifier.fillMaxSize()) {
+                        Box(
+                            Modifier
+                                .padding(horizontal = 12.dp)
+                                .padding(vertical = verticalPadding)
+                        ) {
+                            if (value.text.isEmpty()) {
+                                Text(
+                                    "{\n  \"sehir\": \"Nevsehir\",\n  \"plaka\": 50,\n  \"yerli\": true\n}",
+                                    style = editorTextStyle.copy(color = Color(0xFF6A737D))
+                                )
+                            }
+                            innerTextField()
                         }
-                        innerTextField()
                     }
                 },
-                visualTransformation = {
-                    val highlighted = jsonSyntaxHighlightPreserveIndent(it.text)
-                    TransformedText(highlighted, OffsetMapping.Identity)
-                },
                 maxLines = Int.MAX_VALUE,
-                singleLine = false
+                singleLine = false,
+                modifier = Modifier.fillMaxSize()
             )
-        }
-        if (isError && errorMessage != null) {
-            Column(
-                Modifier.padding(top = 8.dp, start = 8.dp, bottom = 8.dp).fillMaxWidth().weight(1f)
-            ) {
+
+
+            if (isError && errorLine != null && errorMessage != null) {
+                val singleLineHeightPx = with(density) {
+                    editorTextStyle.lineHeight.toPx()
+                }
+                val errorLineContentStartYPx =
+                    (errorLine - 1) * singleLineHeightPx + with(density) { verticalPadding.toPx() }
+                val errorMessageYOffsetPx =
+                    errorLineContentStartYPx + singleLineHeightPx + with(density) { 8.dp.toPx() }
+
                 Text(
-                    text = if (errorLine != null) "Hata (Satır $errorLine): $errorMessage" else "Hata: $errorMessage",
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodySmall
+                    text = errorMessage,
+                    color = Color(0xFFFF6B6B),
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
+                    ),
+                    modifier = Modifier
+                        .offset {
+                            IntOffset(
+                                x = 12.dp.roundToPx(),
+                                y = errorMessageYOffsetPx.roundToInt()
+                            )
+                        }
+                        .fillMaxWidth()
+                        .padding(end = 12.dp)
+                        .background(
+                            Color(0xFFFF6B6B).copy(alpha = 0.1f),
+                            RoundedCornerShape(6.dp)
+                        )
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                        .pointerInput(Unit) {}
                 )
             }
         }
     }
 }
 
-fun jsonSyntaxHighlightPreserveIndent(json: String): AnnotatedString {
-    val keyColor = Color(0xFF61AFEF)
-    val stringColor = Color(0xFF98C379)
-    val numberColor = Color(0xFFD19A66)
-    val booleanColor = Color(0xFFC678DD)
-    val nullColor = Color(0xFFE06C75)
-    val bracketColor = Color(0xFF56B6C2)
-    val commaColor = Color(0xFFABB2BF)
-    val defaultColor = Color(0xFFD8DEE9)
-    val builder = AnnotatedString.Builder()
-    var i = 0
-    while (i < json.length) {
-        try {
-            when (val c = json[i]) {
-                ' ', '\t' -> {
-                    val start = i
-                    while (i < json.length && (json[i] == ' ' || json[i] == '\t')) i++
-                    builder.withStyle(SpanStyle(color = defaultColor)) {
-                        append(
-                            json.substring(
-                                start,
-                                i
-                            )
-                        )
-                    }
-                }
+private fun enhanceJsonEditing(oldValue: TextFieldValue, newValue: TextFieldValue): TextFieldValue {
+    var enhancedText = newValue.text
+    var enhancedSelection = newValue.selection
 
-                '\n' -> {
-                    builder.append("\n")
-                    i++
-                }
+    val lastChar = if (oldValue.text.length < enhancedText.length) {
+        enhancedText.getOrNull(newValue.selection.start - 1)
+    } else null
 
-                '{', '}', '[', ']' -> {
-                    builder.withStyle(
-                        SpanStyle(
-                            color = bracketColor,
-                            fontWeight = FontWeight.Bold
-                        )
-                    ) { append(c) }
-                    i++
-                }
+    when (lastChar) {
+        '{' -> {
+            if (newValue.selection.start < enhancedText.length && enhancedText[newValue.selection.start] != '}') {
+                enhancedText = enhancedText.substring(
+                    0,
+                    newValue.selection.start
+                ) + "}" + enhancedText.substring(newValue.selection.start)
+            } else if (newValue.selection.start == enhancedText.length) {
+                enhancedText += "}"
+            }
+        }
 
-                ':', ',' -> {
-                    builder.withStyle(SpanStyle(color = commaColor)) { append(c) }
-                    i++
-                }
+        '[' -> {
+            if (newValue.selection.start < enhancedText.length && enhancedText[newValue.selection.start] != ']') {
+                enhancedText = enhancedText.substring(
+                    0,
+                    newValue.selection.start
+                ) + "]" + enhancedText.substring(newValue.selection.start)
+            } else if (newValue.selection.start == enhancedText.length) {
+                enhancedText += "]"
+            }
+        }
 
-                '"' -> {
-                    val start = i
-                    i++
-                    var closed = false
-                    while (i < json.length) {
-                        if (json[i] == '\\' && i + 1 < json.length) i++ // escape
-                        else if (json[i] == '"') {
-                            closed = true; break
-                        }
-                        i++
-                    }
-                    if (closed) {
-                        i++
-                        val str = json.substring(start, i)
-                        val isKey = i < json.length && json.drop(i).trimStart().startsWith(":")
-                        builder.withStyle(SpanStyle(color = if (isKey) keyColor else stringColor)) {
-                            append(
-                                str
-                            )
-                        }
-                    } else {
-                        builder.withStyle(SpanStyle(color = stringColor)) {
-                            append(
-                                json.substring(
-                                    start
-                                )
-                            )
-                        }
-                        break
-                    }
-                }
-
-                in '0'..'9', '-' -> {
-                    val start = i
-                    while (i < json.length && (json[i].isDigit() || json[i] == '.' || json[i] == '-')) i++
-                    builder.withStyle(SpanStyle(color = numberColor)) {
-                        append(
-                            json.substring(
-                                start,
-                                i
-                            )
-                        )
-                    }
-                }
-
-                't', 'f' -> {
-                    if (json.startsWith("true", i)) {
-                        builder.withStyle(SpanStyle(color = booleanColor)) { append("true") }
-                        i += 4
-                    } else if (json.startsWith("false", i)) {
-                        builder.withStyle(SpanStyle(color = booleanColor)) { append("false") }
-                        i += 5
-                    } else {
-                        builder.append(c)
-                        i++
-                    }
-                }
-
-                'n' -> {
-                    if (json.startsWith("null", i)) {
-                        builder.withStyle(SpanStyle(color = nullColor)) { append("null") }
-                        i += 4
-                    } else {
-                        builder.append(c)
-                        i++
-                    }
-                }
-
-                else -> {
-                    builder.withStyle(SpanStyle(color = defaultColor)) { append(c) }
-                    i++
+        '"' -> {
+            val charBefore = enhancedText.getOrNull(newValue.selection.start - 2)
+            if (charBefore != '\\' && (newValue.selection.start == enhancedText.length || enhancedText[newValue.selection.start] != '"')) {
+                if (newValue.selection.start < enhancedText.length && enhancedText[newValue.selection.start] != '"') {
+                    enhancedText = enhancedText.substring(
+                        0,
+                        newValue.selection.start
+                    ) + "\"" + enhancedText.substring(newValue.selection.start)
+                } else if (newValue.selection.start == enhancedText.length) {
+                    enhancedText += "\""
                 }
             }
-        } catch (e: Exception) {
-            builder.withStyle(SpanStyle(color = defaultColor)) { append(json.substring(i)) }
-            break
         }
     }
+
+    if (enhancedText.length > oldValue.text.length && enhancedText.endsWith("\n") && oldValue.selection.end == oldValue.text.length) {
+        val currentLineIndex =
+            oldValue.text.substring(0, oldValue.selection.start).count { it == '\n' }
+        val lines = oldValue.text.split('\n')
+        if (currentLineIndex < lines.size) {
+            val previousLine = lines.getOrElse(currentLineIndex) { "" }
+            val currentIndent = previousLine.takeWhile { it.isWhitespace() }
+            var newIndent = currentIndent
+
+            if (previousLine.trimEnd().endsWith('{') || previousLine.trimEnd().endsWith('[')) {
+                newIndent += "  "
+            }
+            enhancedText += newIndent
+            enhancedSelection = TextRange(enhancedText.length)
+        }
+    }
+
+    if (lastChar == '\n' && newValue.selection.start > 0) {
+        val charBeforeCursor = enhancedText.getOrNull(newValue.selection.start - 2)
+        val charAfterCursor = enhancedText.getOrNull(newValue.selection.start)
+
+        if ((charBeforeCursor == '{' && charAfterCursor == '}') || (charBeforeCursor == '[' && charAfterCursor == ']')) {
+            val currentLineIndex =
+                enhancedText.substring(0, newValue.selection.start - 1).count { it == '\n' }
+            val lines = enhancedText.split('\n')
+            val indentOfParent =
+                lines.getOrElse(currentLineIndex - 1) { "" }.takeWhile { it.isWhitespace() }
+            val childIndent = "$indentOfParent  "
+
+            val textBefore = enhancedText.substring(0, newValue.selection.start)
+            val textAfter = enhancedText.substring(newValue.selection.start)
+
+            enhancedText = textBefore + childIndent + "\n" + indentOfParent + textAfter.trimStart()
+            enhancedSelection = TextRange(textBefore.length + childIndent.length)
+        }
+    }
+
+    return TextFieldValue(enhancedText, enhancedSelection)
+}
+
+fun modernJsonSyntaxHighlighting(
+    json: String,
+    isError: Boolean,
+    errorLineNum: Int?
+): AnnotatedString {
+    val builder = AnnotatedString.Builder()
+    builder.append(json)
+
+    val keywordStyle = SpanStyle(color = Color(0xFFC586C0), fontWeight = FontWeight.Bold)
+    val stringStyle = SpanStyle(color = Color(0xFFCE9178))
+    val numberStyle = SpanStyle(color = Color(0xFFB5CEA8))
+    val keyStyle = SpanStyle(color = Color(0xFF9CDCFE), fontWeight = FontWeight.Medium)
+    val bracketStyle = SpanStyle(color = Color(0xFFDCDCAA), fontWeight = FontWeight.Bold)
+    val punctuationStyle = SpanStyle(color = Color(0xFFD4D4D4))
+
+    val keywordRegex = "\\b(true|false|null)\\b".toRegex()
+    val stringRegex = "\"[^\"]*\"".toRegex()
+    val numberRegex = "\\b-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?\\b".toRegex()
+    val keyRegex = "\"[^\"]*\"(?=\\s*:)".toRegex()
+    val bracketRegex = "[{}\\[\\]]".toRegex()
+    val punctuationRegex = "[:,]".toRegex()
+
+    numberRegex.findAll(json).forEach { matchResult ->
+        builder.addStyle(numberStyle, matchResult.range.first, matchResult.range.last + 1)
+    }
+
+    keywordRegex.findAll(json).forEach { matchResult ->
+        builder.addStyle(keywordStyle, matchResult.range.first, matchResult.range.last + 1)
+    }
+
+    stringRegex.findAll(json).forEach { matchResult ->
+        builder.addStyle(stringStyle, matchResult.range.first, matchResult.range.last + 1)
+    }
+
+    keyRegex.findAll(json).forEach { matchResult ->
+        builder.addStyle(keyStyle, matchResult.range.first, matchResult.range.last + 1)
+    }
+
+    bracketRegex.findAll(json).forEach { matchResult ->
+        builder.addStyle(bracketStyle, matchResult.range.first, matchResult.range.last + 1)
+    }
+
+    punctuationRegex.findAll(json).forEach { matchResult ->
+        builder.addStyle(punctuationStyle, matchResult.range.first, matchResult.range.last + 1)
+    }
+
+    if (isError && errorLineNum != null && errorLineNum > 0) {
+        val lines = json.split('\n')
+        if (errorLineNum <= lines.size) {
+            val errorLineIndex = errorLineNum - 1
+            var startCharIndex = 0
+            for (i in 0 until errorLineIndex) {
+                startCharIndex += lines[i].length + 1
+            }
+            val endCharIndex = startCharIndex + lines[errorLineIndex].length
+
+            if (startCharIndex < endCharIndex && endCharIndex <= json.length) {
+                builder.addStyle(
+                    SpanStyle(
+                        background = Color(0xFFFF6B6B).copy(alpha = 0.3f),
+                        color = Color(0xFFFF6B6B)
+                    ),
+                    startCharIndex,
+                    endCharIndex
+                )
+            }
+        }
+    }
+
     return builder.toAnnotatedString()
 }
 
