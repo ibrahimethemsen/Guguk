@@ -25,45 +25,64 @@ import org.slf4j.LoggerFactory
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
+data class MockResponse(
+
+    val body: String,
+    val statusCode: Int = 200
+)
+
 object MockServerState {
-    // Ana map: Path (String) -> İkincil Map (HttpMethod -> Yanıt JSON'i (String))
+    // Ana map: Path (String) -> İkincil Map (HttpMethod -> MockResponse)
     private val responsesByPathAndMethod =
-        ConcurrentHashMap<String, ConcurrentHashMap<HttpMethod, String>>()
+        ConcurrentHashMap<String, ConcurrentHashMap<HttpMethod, MockResponse>>()
 
     /**
-     * Belirli bir path ve HTTP metodu için mock yanıtını ayarlar veya günceller.
+     * Belirli bir path ve HTTP metodu için mock yanıtını ve durum kodunu ayarlar veya günceller.
      * @param path Endpoint path'i (örn: "/users")
      * @param method HTTP metodu (örn: HttpMethod.Get, HttpMethod.Post)
      * @param responseJson Bu isteğe döndürülecek JSON yanıtı.
+     * @param statusCode Bu yanıt için HTTP durum kodu.
      */
-    fun setResponse(path: String, method: HttpMethod, responseJson: String) {
+    fun setResponse(
+        path: String,
+        method: HttpMethod,
+        responseJson: String,
+        statusCode: Int = 200
+    ) {
+        val mockResponse = MockResponse(body = responseJson, statusCode = statusCode)
         responsesByPathAndMethod.computeIfAbsent(path) { ConcurrentHashMap() }[method] =
-            responseJson
+            mockResponse
     }
 
     /**
-     * Belirli bir path ve HTTP metodu için tanımlanmış mock yanıtını getirir.
+     * Belirli bir path ve HTTP metodu için tanımlanmış mock yanıtını (body ve durum kodu) getirir.
      * @param path Endpoint path'i
      * @param method HTTP metodu
-     * @return Tanımlıysa JSON yanıtını, yoksa null döner.
+     * @return Tanımlıysa MockResponse nesnesini, yoksa null döner.
      */
-    fun getResponse(path: String, method: HttpMethod): String? {
+    fun getResponse(path: String, method: HttpMethod): MockResponse? {
         return responsesByPathAndMethod[path]?.get(method)
     }
 }
 
-fun startLocalServer() {
+fun startLocalServer(
+    httpPort: Int,
+    httpsPort: Int
+) {
     embeddedServer(
         Netty,
         applicationEnvironment { log = LoggerFactory.getLogger("ktor.application") },
         {
-            envConfig()
+            envConfig(httpPort, httpsPort)
         },
         module = Application::configureRouting
     ).start(wait = true)
 }
 
-private fun ApplicationEngine.Configuration.envConfig() {
+private fun ApplicationEngine.Configuration.envConfig(
+    httpPort: Int,
+    httpsPort: Int
+) {
     val keyStoreFile = File("build/keystore.jks")
     val keyStore = buildKeyStore {
         certificate("gugukMock") {
@@ -73,14 +92,14 @@ private fun ApplicationEngine.Configuration.envConfig() {
     }
     keyStore.saveToFile(keyStoreFile, "guguk1453")
     connector {
-        port = 8080
+        port = httpPort
     }
     sslConnector(
         keyStore = keyStore,
         keyAlias = "gugukMock",
         keyStorePassword = { "guguk1453".toCharArray() },
         privateKeyPassword = { "guguk".toCharArray() }) {
-        port = 8443
+        port = httpsPort
         keyStorePath = keyStoreFile
     }
 }
@@ -94,24 +113,25 @@ fun Application.configureRouting() {
 
                 application.log.info("Yakalandı ${requestedMethod.value} $requestedPath")
 
-                val mockJsonResponse = MockServerState.getResponse(requestedPath, requestedMethod)
+                val mockResponseData =
+                    MockServerState.getResponse(requestedPath, requestedMethod) // Değişiklik burada
 
-                if (mockJsonResponse != null) {
+                if (mockResponseData != null) {
                     application.log.info("Found mock response for ${requestedMethod.value} $requestedPath")
                     try {
-                        if (mockJsonResponse.isNotBlank()) {
-                            Json.parseToJsonElement(mockJsonResponse)
+                        if (mockResponseData.body.isNotBlank()) {
+                            Json.parseToJsonElement(mockResponseData.body) // JSON'u doğrula
                         }
                         call.respondText(
-                            mockJsonResponse,
+                            mockResponseData.body,
                             ContentType.Application.Json,
-                            HttpStatusCode.OK
+                            status = HttpStatusCode.fromValue(mockResponseData.statusCode) // Durum kodunu buradan alıyoruz
                         )
                     } catch (e: SerializationException) {
                         application.log.error("Gecersiz JSON ${requestedMethod.value} $requestedPath: ${e.message}")
                         call.respondText(
-                            " Server'a ulasamadı ${requestedMethod.value} $requestedPath",
-                            status = HttpStatusCode.InternalServerError
+                            " Server'a ulasamadı ${requestedMethod.value} $requestedPath. Invalid JSON in mock data.",
+                            status = HttpStatusCode.InternalServerError // Mock verideki JSON bozuksa sunucu hatası
                         )
                     }
                 } else {
@@ -126,9 +146,4 @@ fun Application.configureRouting() {
             }
         }
     }
-}
-
-
-fun main() {
-    startLocalServer()
 }

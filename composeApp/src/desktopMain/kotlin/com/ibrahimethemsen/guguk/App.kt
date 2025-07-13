@@ -54,6 +54,7 @@ import androidx.compose.ui.unit.dp
 import gugukroot.composeapp.generated.resources.Res
 import gugukroot.composeapp.generated.resources.ic_json
 import io.ktor.http.HttpMethod
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -77,6 +78,7 @@ fun App() {
     MaterialTheme {
         var targetEndpoint by remember { mutableStateOf("") }
         var expanded by remember { mutableStateOf(false) }
+        var isRunServer by remember { mutableStateOf(false) }
         var selectedMethodString by remember { mutableStateOf("GET") }
         val methods = listOf("GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS")
 
@@ -92,6 +94,9 @@ fun App() {
         var searchQuery by remember { mutableStateOf("") }
         var matchPositions by remember { mutableStateOf(listOf<IntRange>()) }
         var currentMatchIndex by remember { mutableStateOf(0) }
+        var httpPort by remember { mutableStateOf(TextFieldValue("")) }
+        var httpsPort by remember { mutableStateOf(TextFieldValue("")) }
+        var responseStatusCode by remember { mutableStateOf("200") }
 
         val selectJsonFile: () -> Unit = {
             val fileDialog =
@@ -160,6 +165,59 @@ fun App() {
         }
 
         Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                OutlinedTextField(
+                    modifier = Modifier.weight(1f),
+                    value = httpPort,
+                    onValueChange = { httpPort = it },
+                    label = {
+                        Text("HTTP port")
+                    }
+                )
+                OutlinedTextField(
+                    modifier = Modifier.weight(1f),
+                    value = httpsPort,
+                    onValueChange = { httpsPort = it },
+                    label = {
+                        Text("HTTPS port")
+                    }
+                )
+
+                OutlinedTextField(
+                    modifier = Modifier.weight(1f),
+                    value = responseStatusCode,
+                    onValueChange = { responseStatusCode = it },
+                    label = { Text("Status Code") },
+                    placeholder = { Text("200") },
+                    singleLine = true
+                )
+                Button(
+                    onClick = {
+                        if (httpPort.text.isBlank() || httpsPort.text.isBlank()) {
+                            feedbackMessage = "Portlar boş olamaz."
+                            feedbackMessageType = FeedbackType.ERROR
+                            return@Button
+                        } else {
+                            coroutineScope.launch(Dispatchers.IO) {
+                                startLocalServer(httpPort.text.toInt(), httpsPort.text.toInt())
+                            }
+                            isRunServer = true
+                        }
+
+                    },
+                    enabled = httpPort.text.isNotBlank() && httpsPort.text.isNotBlank(),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF007BFF)),
+                    modifier = Modifier.fillMaxHeight().padding(top = 8.dp)
+                ) {
+                    Text("Start Server")
+                }
+            }
+            Spacer(Modifier.height(12.dp))
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -271,14 +329,15 @@ fun App() {
                         MockServerState.setResponse(
                             pathKey,
                             ktorHttpMethod,
-                            jsonInputTextValue.text
+                            jsonInputTextValue.text,
+                            statusCode = responseStatusCode.toInt()
                         )
 
                         feedbackMessage =
                             "Mock yanıt '$pathKey' için $selectedMethodString isteğine ayarlandı."
                         feedbackMessageType = FeedbackType.SUCCESS
                     },
-                    enabled = targetEndpoint.isNotBlank() && (jsonInputTextValue.text.isBlank() || jsonParseError == null),
+                    enabled = targetEndpoint.isNotBlank() && (jsonInputTextValue.text.isBlank() || jsonParseError == null) && httpPort.text.isNotBlank() && httpsPort.text.isNotBlank() && isRunServer,
                     shape = RoundedCornerShape(
                         topStart = 0.dp,
                         bottomStart = 0.dp,
@@ -288,7 +347,7 @@ fun App() {
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF007BFF)),
                     modifier = Modifier.fillMaxHeight()
                 ) {
-                    Text("Send", color = Color.White)
+                    Text("Gönder", color = Color.White)
                 }
             }
 
@@ -317,7 +376,7 @@ fun App() {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Response Json", style = MaterialTheme.typography.titleMedium)
+                Text("Json Yanıtı", style = MaterialTheme.typography.titleMedium)
 
                 if (isJsonValid) {
                     Text(
@@ -330,20 +389,67 @@ fun App() {
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            JsonTemplateSelector(
-                onTemplateSelected = { template ->
-                    jsonInputTextValue = TextFieldValue(template, TextRange(template.length))
-                    validateJson(template)
-                },
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = {
+                        searchQuery = it
+                        val regex = if (it.isNotBlank()) Regex(
+                            Regex.escape(it),
+                            RegexOption.IGNORE_CASE
+                        ) else null
+                        val matches =
+                            regex?.findAll(jsonInputTextValue.text)?.map { mr -> mr.range }
+                                ?.toList()
+                                ?: emptyList()
+                        matchPositions = matches
+                        currentMatchIndex = if (matches.isNotEmpty()) 0 else -1
+                    },
+                    label = { Text("Ara...") },
+                    modifier = Modifier.weight(1f),
+                    trailingIcon = {
+                        Row {
+                            IconButton(
+                                onClick = {
+                                    if (matchPositions.isNotEmpty()) {
+                                        currentMatchIndex =
+                                            if (currentMatchIndex > 0) currentMatchIndex - 1 else matchPositions.lastIndex
+                                    }
+                                },
+                                enabled = matchPositions.size > 1
+                            ) {
+                                Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Önceki")
+                            }
+                            IconButton(
+                                onClick = {
+                                    if (matchPositions.isNotEmpty()) {
+                                        currentMatchIndex =
+                                            if (currentMatchIndex < matchPositions.lastIndex) currentMatchIndex + 1 else 0
+                                    }
+                                },
+                                enabled = matchPositions.size > 1
+                            ) {
+                                Icon(
+                                    Icons.Default.KeyboardArrowDown,
+                                    contentDescription = "Sonraki"
+                                )
+                            }
+                        }
+                    }
+                )
+
+                JsonTemplateSelector(
+                    onTemplateSelected = { template ->
+                        jsonInputTextValue = TextFieldValue(template, TextRange(template.length))
+                        validateJson(template)
+                    },
+                    modifier = Modifier.fillMaxHeight()
+                )
+
                 OutlinedButton(
                     onClick = {
                         try {
@@ -364,7 +470,8 @@ fun App() {
                         }
                     },
                     enabled = jsonInputTextValue.text.isNotBlank(),
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.fillMaxHeight(),
+                    shape = RoundedCornerShape(8.dp),
                 ) {
                     Icon(Icons.AutoMirrored.Filled.FormatIndentIncrease, contentDescription = null)
                     Spacer(modifier = Modifier.width(4.dp))
@@ -372,6 +479,7 @@ fun App() {
                 }
 
                 OutlinedButton(
+                    modifier = Modifier.fillMaxHeight(),
                     onClick = {
                         jsonInputTextValue = TextFieldValue("")
                         jsonParseError = null
@@ -380,7 +488,7 @@ fun App() {
                         feedbackMessage = null
                     },
                     enabled = jsonInputTextValue.text.isNotBlank(),
-                    modifier = Modifier.weight(1f)
+                    shape = RoundedCornerShape(8.dp),
                 ) {
                     Icon(Icons.Default.Clear, contentDescription = null)
                     Spacer(modifier = Modifier.width(4.dp))
@@ -389,52 +497,18 @@ fun App() {
             }
 
             Spacer(modifier = Modifier.height(8.dp))
-
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = {
-                    searchQuery = it
-                    val regex = if (it.isNotBlank()) Regex(Regex.escape(it), RegexOption.IGNORE_CASE) else null
-                    val matches = regex?.findAll(jsonInputTextValue.text)?.map { mr -> mr.range }?.toList() ?: emptyList()
-                    matchPositions = matches
-                    currentMatchIndex = if (matches.isNotEmpty()) 0 else -1
-                },
-                label = { Text("Ara...") },
-                modifier = Modifier.fillMaxWidth(),
-                trailingIcon = {
-                    Row {
-                        IconButton(
-                            onClick = {
-                                if (matchPositions.isNotEmpty()) {
-                                    currentMatchIndex = if (currentMatchIndex > 0) currentMatchIndex - 1 else matchPositions.lastIndex
-                                }
-                            },
-                            enabled = matchPositions.size > 1
-                        ) {
-                            Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Önceki")
-                        }
-                        IconButton(
-                            onClick = {
-                                if (matchPositions.isNotEmpty()) {
-                                    currentMatchIndex = if (currentMatchIndex < matchPositions.lastIndex) currentMatchIndex + 1 else 0
-                                }
-                            },
-                            enabled = matchPositions.size > 1
-                        ) {
-                            Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Sonraki")
-                        }
-                    }
-                }
-            )
-            Spacer(modifier = Modifier.height(8.dp))
             JsonCodeEditorWithLineNumbers(
                 value = jsonInputTextValue,
                 onValueChange = { newValue ->
                     jsonInputTextValue = newValue
                     feedbackMessage = null
                     validateJson(newValue.text)
-                    val regex = if (searchQuery.isNotBlank()) Regex(Regex.escape(searchQuery), RegexOption.IGNORE_CASE) else null
-                    val matches = regex?.findAll(newValue.text)?.map { mr -> mr.range }?.toList() ?: emptyList()
+                    val regex = if (searchQuery.isNotBlank()) Regex(
+                        Regex.escape(searchQuery),
+                        RegexOption.IGNORE_CASE
+                    ) else null
+                    val matches = regex?.findAll(newValue.text)?.map { mr -> mr.range }?.toList()
+                        ?: emptyList()
                     matchPositions = matches
                     if (matches.isNotEmpty()) {
                         if (currentMatchIndex !in matches.indices) currentMatchIndex = 0
