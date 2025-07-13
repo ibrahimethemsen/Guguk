@@ -4,26 +4,30 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
-import com.ibrahimethemsen.GugukViewModel
+import androidx.navigation3.runtime.NavEntry
+import androidx.navigation3.ui.NavDisplay
 import com.ibrahimethemsen.guguk.GugukMockControlPanel
+import com.ibrahimethemsen.sample.presentation.detail.DetailScreen
+import com.ibrahimethemsen.sample.presentation.home.HomeScreen
 import com.ibrahimethemsen.sample.ui.theme.GugukRootTheme
 import dagger.hilt.android.AndroidEntryPoint
+
+sealed class Screen {
+    data object Home : Screen()
+    data class Detail(val quoteId: String) : Screen()
+}
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -34,36 +38,58 @@ class MainActivity : ComponentActivity() {
         setContent {
             GugukRootTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    GugukApp(innerPadding)
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        GugukApp(innerPadding = innerPadding)
+
+                        FloatingActionButtonMenu(
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(16.dp)
+                        ) {
+                            GugukMockControlPanel()
+                        }
+                    }
                 }
             }
         }
     }
 }
 
+
 @Composable
 fun GugukApp(
     innerPadding: PaddingValues,
-    gugukViewModel: GugukViewModel = hiltViewModel(),
 ) {
-    val randomQuoteState by gugukViewModel.randomQuote.collectAsState()
+    val backStack = remember { mutableStateListOf<Any>(Screen.Home) }
 
-    Column(
+    NavDisplay(
         modifier = Modifier
-            .padding(innerPadding)
-            .fillMaxSize(),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        if (randomQuoteState.author.isNotEmpty() || randomQuoteState.content.isNotEmpty()) {
-            Text("Author: ${randomQuoteState.author}")
-            Text("Quote: ${randomQuoteState.content}")
-        } else {
-            Text("Loading quote...")
+            .fillMaxSize()
+            .padding(innerPadding),
+        backStack = backStack,
+        onBack = {
+            if (backStack.size > 1) {
+                backStack.removeLastOrNull()
+            }
+        },
+        entryProvider = { route ->
+            when (route) {
+                is Screen.Home -> NavEntry(route) {
+                    HomeScreen(
+                        onNavigateToDetail = { quoteId ->
+                            backStack.add(Screen.Detail(quoteId))
+                        }
+                    )
+                }
+
+                is Screen.Detail -> NavEntry(route) {
+                    DetailScreen(quoteId = route.quoteId) {
+                        backStack.removeLastOrNull()
+                    }
+                }
+
+                else -> NavEntry(Unit) { Text("Unknown route: $route") }
+            }
         }
-        Button(onClick = { gugukViewModel.requestNewQuote() }) {
-            Text("Again Request")
-        }
-        Spacer(modifier = Modifier.height(16.dp))
-        GugukMockControlPanel()
-    }
+    )
 }

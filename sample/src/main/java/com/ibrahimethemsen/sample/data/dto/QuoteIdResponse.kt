@@ -1,12 +1,12 @@
 package com.ibrahimethemsen.sample.data.dto
 
 
-import com.ibrahimethemsen.sample.domain.entity.QuoteRandomEntity
+import com.ibrahimethemsen.sample.domain.entity.QuoteIdEntity
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class QuoteResponse(
+data class QuoteIdResponse(
     @SerialName("author")
     val author: String,
     @SerialName("authorSlug")
@@ -25,9 +25,8 @@ data class QuoteResponse(
     val tags: List<String>
 )
 
-fun QuoteResponse.toEntity() = QuoteRandomEntity(
-    id = id,
+
+fun QuoteIdResponse.toEntity() = QuoteIdEntity(
     author = author,
     content = content,
-    tags = tags
 )

@@ -1,4 +1,4 @@
-package com.ibrahimethemsen
+package com.ibrahimethemsen.sample.presentation.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -17,22 +17,22 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
-class GugukViewModel @Inject constructor(
+class HomeViewModel @Inject constructor(
     private val quoteRepository: QuoteRepository
 ) : ViewModel() {
     private val _refreshTrigger = MutableSharedFlow<Unit>(replay = 0, extraBufferCapacity = 1)
     private val refreshTrigger = _refreshTrigger.asSharedFlow()
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    val randomQuote: StateFlow<QuoteRandomEntity> = refreshTrigger
+    val randomQuote: StateFlow<List<QuoteRandomEntity>> = refreshTrigger
         .onStart { emit(Unit) }
         .flatMapLatest {
-            quoteRepository.getRandomQuote(150, 300)
+            quoteRepository.getRandomQuote(5)
         }
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = QuoteRandomEntity("", "", emptyList())
+            started = SharingStarted.Companion.WhileSubscribed(5000),
+            initialValue = emptyList()
         )
 
     fun requestNewQuote() {

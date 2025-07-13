@@ -1,8 +1,6 @@
 package com.ibrahimethemsen.sample.domain.entity
 
-data class QuoteRandomEntity(
-    val id : String,
+data class QuoteIdEntity(
     val author: String,
     val content: String,
-    val tags: List<String>
 )

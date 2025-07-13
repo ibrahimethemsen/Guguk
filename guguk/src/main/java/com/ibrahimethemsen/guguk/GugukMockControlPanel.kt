@@ -17,13 +17,14 @@ fun rememberMockDataManager(): GugukMockDataManager {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GugukMockControlPanel(
+    modifier: Modifier = Modifier,
     mockManager: GugukMockDataManager = rememberMockDataManager()
 ) {
     var newEndpoint by remember { mutableStateOf("") }
     var mockEndpoints by remember { mutableStateOf(mockManager.getMockEndpoints()) }
 
     Card(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(16.dp)
     ) {
